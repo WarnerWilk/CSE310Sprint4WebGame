@@ -1,0 +1,9 @@
+html,body{height:100%;margin:0;background:#0b1220;color:#e6eef8;font-family:Inter,Arial,Helvetica,sans-serif}
+#game{display:block;background:#0b1330;width:100%;height:100vh}
+#hud{position:fixed;left:12px;top:12px;background:rgba(10,12,20,0.6);padding:8px 10px;border-radius:6px;color:#dbeafe;font-size:14px}
+#hud div{margin:4px 0}
+#overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,6,10,0.6);color:#fff;font-size:26px}
+.hidden{display:none}
+.win{background:#153;}
+.lose{background:#831;}
+canvas{image-rendering:pixelated}
