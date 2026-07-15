@@ -6,4 +6,5 @@ html,body{height:100%;margin:0;background:#0b1220;color:#e6eef8;font-family:Inte
 .hidden{display:none}
 .win{background:#153;}
 .lose{background:#831;}
+.info{background:#264653;}
 canvas{image-rendering:pixelated}
