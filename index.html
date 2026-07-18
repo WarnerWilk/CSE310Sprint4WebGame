@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>The Long Fall — Recon Prototype</title>
+  <title>The Long Fall</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -10,14 +10,16 @@
   <canvas id="game"></canvas>
   <div id="hud">
     <div id="heat">Heat: <span id="heatVal">0%</span></div>
+    <div id="scans" class="hidden">Scans: <span id="scansVal">0/0</span></div>
     <div id="carry">Carry: <span id="carryVal">None</span></div>
     <div id="devices">Inventory: <span id="devicesVal">0</span></div>
     <div id="placements">Placed: <span id="placementsVal">0/0</span></div>
     <div id="floor">Floor: <span id="floorVal">1</span></div>
+    <div id="phase">Phase: <span id="phaseVal">Recon</span></div>
     <div id="rating">Rating: <span id="ratingVal">D Rank</span></div>
     <div id="phaseScore">Phase Score: <span id="phaseScoreVal">0</span></div>
     <div id="totalScore">Total Score: <span id="totalScoreVal">0</span></div>
-    <div id="instr">Move: WASD / arrow keys. Hold E to place a device. Restock at the Exit when empty. Press ESC to finish early.</div>
+    <div id="instr">Move: WASD. Recon: Stand in circles to scan. Placement: Hold E to place. ESC to advance.</div>
   </div>
   <div id="overlay" class="hidden"></div>
   <script src="game.js"></script>
