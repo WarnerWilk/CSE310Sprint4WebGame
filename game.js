@@ -1,5 +1,5 @@
 /* The Long Fall
-   Expanded top-down canvas game with Recon (Phase 1), Placement (Phase 2), and Detonation (Phase 3).
+   Expanded top-down canvas game with Recon, Placement, Detonation, and Stealth.
 */
 (() => {
   const canvas = document.getElementById('game');
@@ -17,6 +17,7 @@
   const dist = (ax,ay,bx,by)=>Math.hypot(ax-bx,ay-by);
 
   // Input
+  let lastInput = { left: 0, right: 0, action: 0, escape: 0 };
   const input = {up:0,down:0,left:0,right:0,action:0,escape:0};
   window.addEventListener('keydown', e=>{
     if(e.key==='ArrowUp'||e.key==='w') input.up=1;
@@ -37,217 +38,331 @@
 
   // Level definition
   const levels = [
-    { // floor 0: ground floor
-      width:1600, height:1000,
+    { 
+      width:1600, height:1000, name: "Ground",
       walls:[
-        {x:0,y:0,w:1600,h:24},
-        {x:0,y:976,w:1600,h:24},
-        {x:0,y:0,w:24,h:1000},
-        {x:1576,y:0,w:24,h:1000},
-        {x:200,y:120,w:800,h:24},
-        {x:200,y:120,w:24,h:400},
-        {x:1000,y:400,w:24,h:380},
-        {x:400,y:500,w:600,h:24},
+        {x:0,y:0,w:1600,h:24}, {x:0,y:976,w:1600,h:24},
+        {x:0,y:0,w:24,h:1000}, {x:1576,y:0,w:24,h:1000},
+        {x:200,y:120,w:800,h:24}, {x:200,y:120,w:24,h:400},
+        {x:1000,y:400,w:24,h:380}, {x:400,y:500,w:600,h:24},
         {x:1120,y:620,w:220,h:24}
       ],
       scanPoints:[
-        {id:'spot-1',x:300,y:220,r:30,material:'brick',progress:0,locked:false},
-        {id:'spot-2',x:700,y:140,r:30,material:'steel',progress:0,locked:false},
-        {id:'spot-3',x:1180,y:720,r:30,material:'concrete',progress:0,locked:false},
-        {id:'spot-4',x:920,y:540,r:30,material:'masonry',progress:0,locked:false},
-        {id:'spot-5',x:520,y:780,r:30,material:'concrete',progress:0,locked:false}
+        {id:'g-1',x:300,y:220,r:30,material:'brick',progress:0,locked:false},
+        {id:'g-2',x:700,y:140,r:30,material:'steel',progress:0,locked:false},
+        {id:'g-3',x:1180,y:720,r:30,material:'masonry',progress:0,locked:false},
+        {id:'g-4',x:920,y:540,r:30,material:'brick',progress:0,locked:false},
+        {id:'g-5',x:520,y:780,r:30,material:'steel',progress:0,locked:false}
       ],
       placementSpots:[],
-      stairs:[{x:1450,y:860,w:80,h:120,toFloor:1}],
-      exit:{x:60,y:860,w:80,h:120,active:true}
+      stairs:[
+        {x:1450,y:860,w:80,h:120,toFloor:1,label:'UP'}, 
+        {x:1450,y:120,w:80,h:120,toFloor:2,label:'DOWN'} 
+      ],
+      exit:{x:60,y:860,w:80,h:120,active:true},
+      watchers: [
+        {type:'guard', x:400, y:300, pts:[{x:400,y:300},{x:800,y:300}], ptIdx:0, speed:90, dir:0, fov:Math.PI/2, range:350}
+      ]
     },
-    { // floor 1: second floor
-      width:1600, height:1000,
+    { 
+      width:1600, height:1000, name: "Upper",
       walls:[
-        {x:0,y:0,w:1600,h:24},
-        {x:0,y:976,w:1600,h:24},
-        {x:0,y:0,w:24,h:1000},
-        {x:1576,y:0,w:24,h:1000},
-        {x:300,y:160,w:900,h:24},
-        {x:300,y:160,w:24,h:320},
-        {x:900,y:480,w:24,h:360},
-        {x:1160,y:240,w:220,h:24}
+        {x:0,y:0,w:1600,h:24}, {x:0,y:976,w:1600,h:24},
+        {x:0,y:0,w:24,h:1000}, {x:1576,y:0,w:24,h:1000},
+        {x:300,y:160,w:900,h:24}, {x:300,y:160,w:24,h:320},
+        {x:900,y:480,w:24,h:360}, {x:1160,y:240,w:220,h:24}
       ],
-      scanPoints:[],
+      scanPoints:[
+        {id:'u-1',x:340,y:200,r:30,material:'masonry',progress:0,locked:false},
+        {id:'u-2',x:940,y:440,r:30,material:'steel',progress:0,locked:false},
+        {id:'u-3',x:1200,y:280,r:30,material:'masonry',progress:0,locked:false},
+        {id:'u-4',x:400,y:800,r:30,material:'steel',progress:0,locked:false}
+      ],
       placementSpots:[],
-      stairs:[{x:1450,y:860,w:80,h:120,toFloor:2},{x:60,y:860,w:80,h:120,toFloor:0}],
-      exit:{x:60,y:860,w:80,h:120,active:true}
+      stairs:[{x:1450,y:860,w:80,h:120,toFloor:0,label:'DOWN'}], 
+      exit: null,
+      watchers: [
+        {type:'camera', x:330, y:190, dir:Math.PI/4, fov:Math.PI/2.5, range:450}
+      ]
     },
-    { // floor 2: basement
-      width:1600, height:1000,
+    { 
+      width:1600, height:1000, name: "Basement",
       walls:[
-        {x:0,y:0,w:1600,h:24},
-        {x:0,y:976,w:1600,h:24},
-        {x:0,y:0,w:24,h:1000},
-        {x:1576,y:0,w:24,h:1000},
-        {x:220,y:160,w:700,h:24},
-        {x:220,y:160,w:24,h:260},
-        {x:900,y:420,w:24,h:320},
-        {x:1050,y:620,w:320,h:24}
+        {x:0,y:0,w:1600,h:24}, {x:0,y:976,w:1600,h:24},
+        {x:0,y:0,w:24,h:1000}, {x:1576,y:0,w:24,h:1000},
+        {x:220,y:160,w:700,h:24}, {x:220,y:160,w:24,h:260},
+        {x:900,y:420,w:24,h:320}, {x:1050,y:620,w:320,h:24}
       ],
-      scanPoints:[],
+      scanPoints:[
+        {id:'b-1',x:260,y:200,r:30,material:'concrete',progress:0,locked:false},
+        {id:'b-2',x:940,y:380,r:30,material:'concrete',progress:0,locked:false},
+        {id:'b-3',x:1100,y:660,r:30,material:'steel',progress:0,locked:false},
+        {id:'b-4',x:500,y:800,r:30,material:'concrete',progress:0,locked:false}
+      ],
       placementSpots:[],
-      stairs:[{x:1450,y:860,w:80,h:120,toFloor:1}],
-      exit:{x:60,y:860,w:80,h:120,active:true}
+      stairs:[{x:1450,y:120,w:80,h:120,toFloor:0,label:'UP'}], 
+      exit: null,
+      watchers: [
+        {type:'guard', x:600, y:700, pts:[{x:600,y:700},{x:1000,y:700}], ptIdx:0, speed:80, dir:0, fov:Math.PI/2.2, range:350}
+      ]
     }
   ];
 
   const deviceTypes = {
-    acid: { type:'acid', name:'Acid', color:'#9f7aea', noiseRadius:70, placeTime:1.6, preferred:['brick','masonry','steel'], desc:'Best on masonry and brick, quiet to place.' },
-    explosive: { type:'explosive', name:'Explosive', color:'#ff6b6b', noiseRadius:120, placeTime:2.2, preferred:['steel','concrete'], desc:'High-impact on supports, louder to carry.' },
-    press: { type:'press', name:'Press', color:'#ffb703', noiseRadius:90, placeTime:1.8, preferred:['concrete','steel'], desc:'Mechanical device for concrete columns and framing.' }
+    acid: { type:'acid', name:'Acid', color:'#9f7aea', noiseRadius:100, placeTime:1.6, preferred:['brick','masonry','steel'] },
+    explosive: { type:'explosive', name:'Explosive', color:'#ff6b6b', noiseRadius:250, placeTime:2.2, preferred:['steel','concrete'] },
+    press: { type:'press', name:'Press', color:'#ffb703', noiseRadius:150, placeTime:1.8, preferred:['concrete','steel'] }
   };
 
   const SCAN_TIME = 2.0;
 
-  let loadout = ['acid','explosive','press','acid'];
+  // Stealth State
+  let heat = 0;
+  const MAX_HEAT = 100;
+  let loadout = ['acid','explosive','press','acid', 'explosive'];
   let inventory = [];
   let holdPlacement = {spot:null, timer:0};
   let gameState = 'playing'; 
-  let phaseState = 'recon'; // recon, placement, detonation
-  let placementLog = [];
+  let phaseState = 'recon'; 
   let exitInfoShown = false;
-  let detonationState = { active:false, started:false, countdown:1.4, pulseTimer:0, supports:[], collapsed:false, message:'Phase 3 prototype ready.' };
+  
+  // Phase 3 State
+  let detonationState = { 
+    active: false, started: false, nodes: [], edges: [], triggers: [], 
+    selectedIndex: 0, floorStates: {}, triggerHistory: [], completed: false,
+    score: null, totalDevicesStartedWith: 0
+  };
 
   function getDeviceData(type){ return deviceTypes[type] || null; }
   
   function buildInventory(){
-    inventory = loadout.filter(Boolean).slice(0,4);
+    inventory = loadout.filter(Boolean).slice(0,5);
+    detonationState.totalDevicesStartedWith = inventory.length;
     player.carrying = inventory.shift() || null;
   }
   
   function getCurrentDevice(){ return player.carrying ? getDeviceData(player.carrying) : null; }
   
-  function getPlacementCount(){ return levels[0].placementSpots.filter(s=>s.placedDevice).length; }
-  function getTotalPlacementSlots(){ return levels[0].placementSpots.length; }
-  function getScannedCount(){ return levels[0].scanPoints.filter(s=>s.progress >= SCAN_TIME).length; }
-  function getTotalScanSlots(){ return levels[0].scanPoints.length; }
+  function getPlacementCount(){ return levels.reduce((acc, l) => acc + (l.placementSpots||[]).filter(s=>s.placedDevice).length, 0); }
+  function getTotalPlacementSlots(){ return levels.reduce((acc, l) => acc + (l.placementSpots||[]).length, 0); }
+  function getScannedCount(){ return levels.reduce((acc, l) => acc + (l.scanPoints||[]).filter(s=>s.progress >= SCAN_TIME).length, 0); }
+  function getTotalScanSlots(){ return levels.reduce((acc, l) => acc + (l.scanPoints||[]).length, 0); }
 
-  function buildPlacementMap(){
-    return {
-      level: 0,
-      placedSpots: levels[0].placementSpots.map(s=>({
-        id:s.id, x:s.x, y:s.y, material:s.material, confidence:s.confidence, placedDevice:s.placedDevice,
-        fit: s.placedDevice ? (getDeviceData(s.placedDevice).preferred.includes(s.material) ? 'good' : 'weak') : 'none'
-      })),
-      inventoryRemaining: inventory.map(t=>({type:t}))
-    };
+  // --- STEALTH & LOS MATH ---
+  function lineIntersect(x1,y1,x2,y2, x3,y3,x4,y4) {
+    const denom = (y4-y3)*(x2-x1) - (x4-x3)*(y2-y1);
+    if (denom === 0) return null;
+    const ua = ((x4-x3)*(y1-y3) - (y4-y3)*(x1-x3)) / denom;
+    const ub = ((x2-x1)*(y1-y3) - (y2-y1)*(x1-x3)) / denom;
+    if (ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1) {
+      return { x: x1 + ua*(x2-x1), y: y1 + ua*(y2-y1), t: ua };
+    }
+    return null;
   }
 
-  function buildDetonationState(){
-    const placementMap = buildPlacementMap();
-    const baseSupports = [
-      {id:'support-a', x:280, y:180, baseLoad:1.2, baseCapacity:2.0, load:1.2, capacity:2.0, status:'safe'},
-      {id:'support-b', x:520, y:180, baseLoad:1.0, baseCapacity:2.0, load:1.0, capacity:2.0, status:'safe'},
-      {id:'support-c', x:760, y:180, baseLoad:1.4, baseCapacity:2.2, load:1.4, capacity:2.2, status:'safe'},
-      {id:'support-d', x:1000, y:180, baseLoad:1.1, baseCapacity:2.1, load:1.1, capacity:2.1, status:'safe'}
-    ];
+  function getWallLines(walls) {
+    const lines = [];
+    for(const w of walls) {
+      lines.push([w.x, w.y, w.x+w.w, w.y]);
+      lines.push([w.x+w.w, w.y, w.x+w.w, w.y+w.h]);
+      lines.push([w.x+w.w, w.y+w.h, w.x, w.y+w.h]);
+      lines.push([w.x, w.y+w.h, w.x, w.y]);
+    }
+    return lines;
+  }
 
-    placementMap.placedSpots.forEach(spot=>{
-      if(!spot.placedDevice) return;
-      const device = getDeviceData(spot.placedDevice);
-      const targetIndex = Math.min(baseSupports.length - 1, ['brick','masonry'].includes(spot.material) ? 0 : ['steel','concrete'].includes(spot.material) ? 2 : 1);
-      const support = baseSupports[targetIndex];
-      if(!support) return;
-      const confidenceBonus = spot.confidence * 0.2;
-      if(device.type === 'explosive'){
-        support.load += 0.95 + confidenceBonus;
-        support.capacity = Math.max(0.8, support.capacity - 0.35);
-      } else if(device.type === 'press'){
-        support.load += 0.6 + confidenceBonus;
-        support.capacity = Math.max(0.8, support.capacity - 0.2);
-      } else {
-        support.load += 0.4 + confidenceBonus;
-        support.capacity = Math.max(0.8, support.capacity - 0.1);
+  function isLineBlockedByWalls(x1,y1,x2,y2, walls) {
+    const lines = getWallLines(walls);
+    for(const l of lines) {
+      if(lineIntersect(x1,y1,x2,y2, l[0],l[1],l[2],l[3])) return true;
+    }
+    return false;
+  }
+
+  function computeVisionPolygon(w, walls) {
+    const poly = [{x: w.x, y: w.y}];
+    const numRays = 30;
+    const startAngle = w.dir - w.fov/2;
+    const endAngle = w.dir + w.fov/2;
+    const lines = getWallLines(walls);
+    
+    for(let i=0; i<=numRays; i++) {
+      const angle = startAngle + (i/numRays) * w.fov;
+      const rx = w.x + Math.cos(angle) * w.range;
+      const ry = w.y + Math.sin(angle) * w.range;
+      
+      let minT = 1.0;
+      let hit = {x: rx, y: ry};
+      
+      for(const l of lines) {
+        const pt = lineIntersect(w.x, w.y, rx, ry, l[0],l[1],l[2],l[3]);
+        if(pt && pt.t < minT) {
+          minT = pt.t;
+          hit = {x: pt.x, y: pt.y};
+        }
       }
+      poly.push(hit);
+    }
+    return poly;
+  }
+
+
+  // --- DETONATION PHASE LOGIC ---
+  function buildDetonationGraph(){
+    const nodes = [];
+    const scaleX = 0.4; 
+    const buildingX = W/2 - 320;
+    const floorYMap = { 1: 0, 0: 1, 2: 2 }; 
+    
+    levels.forEach((lvl, floorIdx) => {
+      const visualTier = floorYMap[floorIdx];
+      let baseCap = 2.0; let baseLoad = 1.0;
+      if (visualTier === 2) { baseCap = 4.0; baseLoad = 2.8; } 
+      else if (visualTier === 1) { baseCap = 3.0; baseLoad = 1.8; } 
+      
+      const points = lvl.scanPoints || [];
+      points.forEach(sp => {
+        const placement = (lvl.placementSpots || []).find(p => p.id === sp.id && p.placedDevice);
+        nodes.push({
+          id: sp.id, floorIdx: floorIdx, visualTier: visualTier,
+          cx: buildingX + (sp.x * scaleX), cy: 200 + (visualTier * 160), 
+          capacity: baseCap + (['concrete','steel'].includes(sp.material) ? 0.8 : 0),
+          originalCapacity: baseCap + (['concrete','steel'].includes(sp.material) ? 0.8 : 0),
+          load: baseLoad, status: 'safe',
+          device: placement ? placement.placedDevice : null,
+          confidence: placement ? placement.confidence : 0,
+          triggered: false, shake: 0
+        });
+      });
     });
 
-    return { placementMap, supports: baseSupports.map(s=>({...s})) };
+    const edges = [];
+    nodes.forEach(n1 => {
+      nodes.forEach(n2 => {
+        if (n1.id === n2.id) return;
+        if (n1.floorIdx === n2.floorIdx && Math.abs(n1.cx - n2.cx) < 200) edges.push({a: n1.id, b: n2.id});
+        if (Math.abs(n1.visualTier - n2.visualTier) === 1 && Math.abs(n1.cx - n2.cx) < 180) edges.push({a: n1.id, b: n2.id});
+      });
+    });
+
+    const floorStates = {
+      0: { tier: 0, yOff: 0, rot: 0, vy: 0, vr: 0, fallen: false },
+      1: { tier: 1, yOff: 0, rot: 0, vy: 0, vr: 0, fallen: false },
+      2: { tier: 2, yOff: 0, rot: 0, vy: 0, vr: 0, fallen: false }
+    };
+    const triggers = nodes.filter(n => n.device).map(n => n.id);
+
+    return { nodes, edges, triggers, floorStates };
   }
 
   function startDetonationPrototype(){
-    const generated = buildDetonationState();
-    detonationState.active = true; detonationState.started = true; detonationState.countdown = 0;
-    detonationState.pulseTimer = 0; detonationState.supports = generated.supports; detonationState.collapsed = false;
-    detonationState.message = 'Detonation prototype active.';
-    phaseState = 'detonation';
-    showOverlay('Phase 3 prototype: collapse sequence started.', 'win');
-    setTimeout(()=>hideOverlay(), 1400);
+    const graph = buildDetonationGraph();
+    detonationState.nodes = graph.nodes; detonationState.edges = graph.edges;
+    detonationState.triggers = graph.triggers; detonationState.floorStates = graph.floorStates;
+    detonationState.selectedIndex = 0; detonationState.triggerHistory = [];
+    detonationState.active = true; detonationState.started = true; detonationState.completed = false;
+    phaseState = 'detonation'; heat = 0;
+    showOverlay('Collapse sequence primed. Select device and press E to trigger.', 'info');
+    setTimeout(()=>hideOverlay(), 2500);
   }
 
-  function tickDetonation(dt){
-    if(!detonationState.active || detonationState.collapsed) return;
-    detonationState.pulseTimer += dt;
-    if(detonationState.pulseTimer < 0.8) return;
-    detonationState.pulseTimer = 0;
-
-    const activeSupports = detonationState.supports.filter(s=>s.status !== 'failed');
-    if(!activeSupports.length){
-      detonationState.collapsed = true;
-      detonationState.message = 'Collapse complete.';
-      return;
-    }
-
-    const ranked = activeSupports.slice().sort((a,b)=> (b.load / Math.max(0.6, b.capacity)) - (a.load / Math.max(0.6, a.capacity)));
-    const target = ranked[0];
-    target.status = 'failed';
-    target.health = 0;
-
-    detonationState.supports.forEach(s=>{
-      if(s.id === target.id) return;
-      if(Math.abs(s.x - target.x) < 240){ s.load += 0.2; s.capacity = Math.max(0.8, s.capacity - 0.04); }
-    });
-
-    detonationState.supports.forEach(s=>{
-      const stress = s.load / Math.max(0.8, s.capacity);
-      if(s.status === 'failed') return;
-      if(stress >= 0.9) s.status = 'critical';
-      else if(stress >= 0.7) s.status = 'warn';
-      else s.status = 'safe';
-    });
-
-    if(detonationState.supports.every(s=>s.status === 'failed')){
-      detonationState.collapsed = true;
-      detonationState.message = 'Collapse complete.';
+  function triggerDevice(nodeId) {
+    const node = detonationState.nodes.find(n => n.id === nodeId);
+    if (!node || node.triggered || node.status === 'failed') return;
+    
+    node.triggered = true;
+    detonationState.triggerHistory.push(performance.now());
+    
+    const device = getDeviceData(node.device);
+    const confBonus = node.confidence * 0.3;
+    
+    if(device.type === 'explosive'){
+      node.load += 1.5 + confBonus; node.capacity = Math.max(0.1, node.capacity - 1.2);
+    } else if(device.type === 'press'){
+      node.load += 0.8 + confBonus; node.capacity = Math.max(0.1, node.capacity - 0.8);
+    } else {
+      node.load += 0.5 + confBonus; node.capacity = Math.max(0.1, node.capacity - 0.5);
     }
   }
 
-  function getRestockInfo(){ return [`${deviceTypes.acid.name}: Best on masonry/brick/steel, quiet to place.`, `${deviceTypes.explosive.name}: Best on steel/concrete supports, powerful but noisy.`, `${deviceTypes.press.name}: Best on concrete columns and framing, mechanical.`].join(' '); }
+  function calculateSuspicion() {
+    const totalPlaced = detonationState.triggers.length;
+    if (totalPlaced === 0) return { score: 100, verdict: 'NO COLLAPSE: JOB FAILED' };
+    
+    let timeDiffSum = 0;
+    for(let i=1; i<detonationState.triggerHistory.length; i++){
+      timeDiffSum += (detonationState.triggerHistory[i] - detonationState.triggerHistory[i-1]) / 1000;
+    }
+    const avgDelay = detonationState.triggerHistory.length > 1 ? timeDiffSum / (detonationState.triggerHistory.length - 1) : 0;
+    const deviceFactor = (totalPlaced / Math.max(1, detonationState.totalDevicesStartedWith)) * 40;
+    const timeFactor = Math.max(0, 60 - (avgDelay * 15));
+    
+    let score = clamp(Math.round(deviceFactor + timeFactor), 0, 100);
+    let verdict = score > 75 ? "ARSON SUSPECTED: SYNCHRONIZED DEMOLITION DISCOVERED" : 
+                  score > 40 ? "INVESTIGATION OPENED: ANOMALOUS STRUCTURAL FAILURE" : 
+                  "TRAGIC ACCIDENT: ROUTINE STRUCTURAL COLLAPSE";
+    return { score, verdict };
+  }
 
-  // Player
+  function tickDetonationPhysics(dt){
+    if(!detonationState.active) return;
+    let anyActive = false; let anyFailedThisFrame = false;
+
+    detonationState.nodes.forEach(n => {
+      if (n.status === 'failed') return;
+      anyActive = true;
+      const stress = n.load / Math.max(0.1, n.capacity);
+      if (stress >= 1.0) {
+        n.status = 'failed'; anyFailedThisFrame = true;
+        const neighbors = detonationState.edges.filter(e => e.a === n.id || e.b === n.id).map(e => e.a === n.id ? e.b : e.a);
+        const intactNeighbors = detonationState.nodes.filter(on => neighbors.includes(on.id) && on.status !== 'failed');
+        if (intactNeighbors.length > 0) {
+          const loadShare = n.load / intactNeighbors.length;
+          intactNeighbors.forEach(inb => inb.load += loadShare);
+        }
+      } else if (stress > 0.8) {
+        n.shake = (Math.random() - 0.5) * 4 * (stress - 0.7);
+        n.status = stress > 0.95 ? 'critical' : 'warn';
+      } else { n.shake = 0; n.status = 'safe'; }
+    });
+
+    [0, 1, 2].forEach(tier => {
+      const fs = detonationState.floorStates[tier];
+      const floorNodes = detonationState.nodes.filter(n => n.visualTier === tier);
+      const originalCap = floorNodes.reduce((sum, n) => sum + n.originalCapacity, 0);
+      const currentCap = floorNodes.filter(n => n.status !== 'failed').reduce((sum, n) => sum + n.capacity, 0);
+      
+      if (currentCap < originalCap * 0.4) {
+        fs.fallen = true; fs.vy += 400 * dt; fs.vr += (Math.random() - 0.5) * 2 * dt;
+        fs.yOff += fs.vy * dt; fs.rot += fs.vr * dt;
+      }
+    });
+
+    if (!anyFailedThisFrame && detonationState.triggers.length > 0) {
+      const allTriggered = detonationState.nodes.filter(n => n.device).every(n => n.triggered);
+      if (allTriggered && !detonationState.completed) {
+        detonationState.completed = true;
+        setTimeout(() => { detonationState.score = calculateSuspicion(); gameState = 'finished'; }, 2000);
+      }
+    }
+  }
+
+  // --- RECON/PLACEMENT PLAYER LOGIC ---
   const player = { x:120, y:200, r:14, speed:240, floor:0, carrying:null };
-
-  // Watchers
-  const watchers = [
-    { id:'guard-ground', type:'guard', x:600,y:700,floor:0,speed:120, waypoints:[{x:600,y:700},{x:1200,y:700},{x:1200,y:300},{x:600,y:300}], idx:0, fov:Math.PI*0.6, viewDist:420 },
-    { id:'guard-second', type:'guard', x:420,y:320,floor:1,speed:100, waypoints:[{x:420,y:320},{x:980,y:320},{x:980,y:760},{x:420,y:760}], idx:0, fov:Math.PI*0.6, viewDist:360 },
-    { id:'camera-basement-1', type:'camera', x:420,y:260,floor:2, fov:Math.PI*0.55, viewDist:320, facingAngle:Math.PI/6 },
-    { id:'camera-basement-2', type:'camera', x:1180,y:620,floor:2, fov:Math.PI*0.55, viewDist:320, facingAngle:Math.PI*0.95 },
-    { id:'camera-second', type:'camera', x:1040,y:240,floor:1, fov:Math.PI*0.55, viewDist:320, facingAngle:Math.PI/2 }
-  ];
-
-  // Game state
   let last = performance.now();
-  let heat = 0; 
-  const heatIncreaseSeen = 0.18;
-  const heatDecrease = 0.08;
-  let caught = false;
-  let win = false;
-  const scoreState = { completedPhases: 0, totalScore: 0, phaseScore: 0, heatPenalty: 0 };
-
+  
   function resetLevel() {
     levels.forEach(lev=>{
-      if(lev.placementSpots) lev.placementSpots = []; // Cleared for Phase 1
+      if(lev.placementSpots) lev.placementSpots = []; 
       if(lev.scanPoints) lev.scanPoints.forEach(s=>{ s.progress = 0; s.locked = false; });
+      if(lev.watchers) lev.watchers.forEach(w => {
+         if(w.type === 'guard' && w.pts) {
+             w.ptIdx = 0; w.x = w.pts[0].x; w.y = w.pts[0].y;
+         }
+      });
     });
     player.floor = 0; player.carrying=null;
-    phaseState = 'recon';
-    detonationState = { active:false, started:false, countdown:1.4, pulseTimer:0, supports:[], collapsed:false, message:'Phase 3 prototype ready.' };
+    phaseState = 'recon'; heat = 0; gameState = 'playing';
     
     const startExit = levels[0].exit;
     if(startExit){
@@ -256,186 +371,90 @@
     } else {
       player.x = 120; player.y = 200;
     }
-    watchers.forEach(w=>{ if(w.type==='guard') w.idx = 0; });
-    heat = 0; caught=false; win=false;
-    levels.forEach(l=>l.exit.active=true);
+    levels[0].exit.active=true;
     holdPlacement = {spot:null, timer:0};
-    placementLog = [];
     buildInventory();
+    hideOverlay();
   }
 
   function advanceToPlacement() {
-    // Generate placement spots from successful scans
-    levels[0].placementSpots = levels[0].scanPoints
-      .filter(s => s.progress > 0)
-      .map(s => ({
-        id: s.id, x: s.x, y: s.y, r: s.r, material: s.material,
-        confidence: s.progress / SCAN_TIME,
-        scanned: true, placedDevice: null
-      }));
-      
+    levels.forEach((lvl) => {
+      lvl.placementSpots = (lvl.scanPoints || [])
+        .filter(s => s.progress > 0)
+        .map(s => ({
+          id: s.id, x: s.x, y: s.y, r: s.r, material: s.material,
+          confidence: s.progress / SCAN_TIME, scanned: true, placedDevice: null
+        }));
+    });
     phaseState = 'placement';
-    heat = 0; 
-    
-    // Reset player to exit
     const startExit = levels[0].exit;
-    player.x = startExit.x + startExit.w + player.r + 8;
-    player.y = startExit.y + startExit.h/2;
-    
+    player.x = startExit.x + startExit.w + player.r + 8; player.y = startExit.y + startExit.h/2;
     showOverlay('Recon complete. Returning at night to place devices.', 'info');
     setTimeout(()=>hideOverlay(), 2500);
   }
 
-  function getRating(percent){
-    if(percent >= 0.9) return 'S';
-    if(percent >= 0.75) return 'A';
-    if(percent >= 0.5) return 'B';
-    if(percent >= 0.25) return 'C';
-    return 'D';
-  }
-
-  function calculatePhaseScore(){
-    const heatPenalty = Math.round(heat * 100);
-    const phaseScore = Math.max(0, Math.round((1000) - (heatPenalty * 5)));
-    scoreState.heatPenalty = heatPenalty;
-    scoreState.phaseScore = phaseScore;
-    return { heatPenalty, phaseScore };
-  }
-
   function updateScoreHud(){
-    const { phaseScore, heatPenalty } = calculatePhaseScore();
-    const rating = getRating(phaseScore / 1000); // Fixed the bug: Pass actual performance 
     const current = getCurrentDevice();
-    
-    document.getElementById('phaseScoreVal').textContent = phaseScore;
-    document.getElementById('totalScoreVal').textContent = scoreState.totalScore;
-    document.getElementById('ratingVal').textContent = `${rating} Rank`;
-    document.getElementById('heatVal').textContent = `${Math.round(heat * 100)}%`;
-    document.getElementById('floorVal').textContent = `${player.floor + 1}/${levels.length}`;
-    
-    // Toggle HUD sections based on Phase
-    const hudScans = document.getElementById('scans');
-    const hudCarry = document.getElementById('carry');
-    const hudDevices = document.getElementById('devices');
-    const hudPlacements = document.getElementById('placements');
+    const hudScans = document.getElementById('scans'); const hudCarry = document.getElementById('carry');
+    const hudDevices = document.getElementById('devices'); const hudPlacements = document.getElementById('placements');
     
     if(phaseState === 'recon') {
       document.getElementById('phaseVal').textContent = 'Recon';
       document.getElementById('scansVal').textContent = `${getScannedCount()}/${getTotalScanSlots()}`;
-      hudScans.classList.remove('hidden');
-      hudCarry.classList.add('hidden');
-      hudDevices.classList.add('hidden');
-      hudPlacements.classList.add('hidden');
+      hudScans.classList.remove('hidden'); hudCarry.classList.add('hidden');
+      hudDevices.classList.add('hidden'); hudPlacements.classList.add('hidden');
     } else if (phaseState === 'placement') {
       document.getElementById('phaseVal').textContent = 'Placement';
       document.getElementById('carryVal').textContent = current ? current.name : 'None';
       document.getElementById('devicesVal').textContent = inventory.length;
       document.getElementById('placementsVal').textContent = `${getPlacementCount()}/${getTotalPlacementSlots()}`;
-      hudScans.classList.add('hidden');
-      hudCarry.classList.remove('hidden');
-      hudDevices.classList.remove('hidden');
-      hudPlacements.classList.remove('hidden');
+      hudScans.classList.add('hidden'); hudCarry.classList.remove('hidden');
+      hudDevices.classList.remove('hidden'); hudPlacements.classList.remove('hidden');
     } else {
       document.getElementById('phaseVal').textContent = 'Detonation';
-      hudScans.classList.add('hidden');
-      hudCarry.classList.add('hidden');
-      hudDevices.classList.add('hidden');
-      hudPlacements.classList.add('hidden');
+      hudScans.classList.add('hidden'); hudCarry.classList.add('hidden');
+      hudDevices.classList.add('hidden'); hudPlacements.classList.add('hidden');
     }
-    return { phaseScore, heatPenalty, rating };
   }
 
   function circleRectCollision(cx,cy,r,rect){
-    const rx = clamp(cx, rect.x, rect.x+rect.w);
-    const ry = clamp(cy, rect.y, rect.y+rect.h);
+    const rx = clamp(cx, rect.x, rect.x+rect.w); const ry = clamp(cy, rect.y, rect.y+rect.h);
     return dist(cx,cy,rx,ry) <= r;
   }
 
-  function isLineBlockedByWalls(x1,y1,x2,y2,floorIndex){
-    const dx = x2-x1, dy = y2-y1;
-    const distTotal = Math.hypot(dx,dy);
-    const step = 8;
-    const steps = Math.max(1, Math.floor(distTotal / step));
-    for(let i=1;i<=steps;i++){
-      const t = i/steps;
-      const px = x1 + dx * t;
-      const py = y1 + dy * t;
-      for(const rect of levels[floorIndex].walls){
-        if(px > rect.x && px < rect.x + rect.w && py > rect.y && py < rect.y + rect.h) return true;
-      }
-    }
-    return false;
-  }
-
-  function angleDiff(a,b){
-    let d = a-b;
-    while(d>Math.PI) d-=2*Math.PI;
-    while(d<-Math.PI) d+=2*Math.PI;
-    return d;
-  }
-
-  function watcherSeesPlayer(watcher){
-    if(player.floor !== watcher.floor) return false;
-    const dx = player.x - watcher.x;
-    const dy = player.y - watcher.y;
-    const d = Math.hypot(dx,dy);
-    if(d > watcher.viewDist) return false;
-    const ang = Math.atan2(dy,dx);
-    const facing = watcher.type === 'guard' ? Math.atan2(getGuardTarget(watcher).y - watcher.y, getGuardTarget(watcher).x - watcher.x) : watcher.facingAngle;
-    const a = Math.abs(angleDiff(facing, ang));
-    if(a > watcher.fov/2) return false;
-    return !isLineBlockedByWalls(watcher.x, watcher.y, player.x, player.y, watcher.floor);
-  }
-
-  function getGuardTarget(watcher){ return watcher.waypoints[watcher.idx] || {x: watcher.x, y: watcher.y}; }
-
-  function raycastToWall(gx,gy,angle,maxDist,floorIndex){
-    const step = 6;
-    for(let t=0;t<=maxDist;t+=step){
-      const px = gx + Math.cos(angle)*t;
-      const py = gy + Math.sin(angle)*t;
-      for(const r of levels[floorIndex].walls){
-        if(px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h){
-          const prevT = Math.max(0, t - step);
-          return {x: gx + Math.cos(angle)*prevT, y: gy + Math.sin(angle)*prevT};
-        }
-      }
-    }
-    return {x: gx + Math.cos(angle)*maxDist, y: gy + Math.sin(angle)*maxDist};
-  }
-
-  function computeVisionPolygon(watcher){
-    const pts = [];
-    const facing = watcher.type === 'guard' ? Math.atan2(getGuardTarget(watcher).y - watcher.y, getGuardTarget(watcher).x - watcher.x) : watcher.facingAngle;
-    const angleStep = (2 * Math.PI) / 180;
-    const start = facing - watcher.fov/2;
-    const end = facing + watcher.fov/2;
-    for(let a = start; a <= end + 1e-6; a += angleStep){
-      pts.push(raycastToWall(watcher.x, watcher.y, a, watcher.viewDist, watcher.floor));
-    }
-    return pts;
-  }
-
   function update(dt){
-    if(caught || win) return;
+    if (gameState === 'finished') return;
+    
+    if (gameState === 'caught') {
+      if(input.action && !lastInput.action) resetLevel();
+      lastInput.action = input.action; lastInput.left = input.left; lastInput.right = input.right; lastInput.escape = input.escape;
+      return;
+    }
 
     if(phaseState === 'detonation'){
       if(!detonationState.started){
-        detonationState.countdown -= dt;
-        if(detonationState.countdown <= 0 || input.action) startDetonationPrototype();
-      } else { tickDetonation(dt); }
+        if(input.action && !lastInput.action) startDetonationPrototype();
+      } else {
+        tickDetonationPhysics(dt);
+        if (detonationState.triggers.length > 0 && !detonationState.completed) {
+          if (input.right && !lastInput.right) detonationState.selectedIndex = (detonationState.selectedIndex + 1) % detonationState.triggers.length;
+          if (input.left && !lastInput.left) detonationState.selectedIndex = (detonationState.selectedIndex - 1 + detonationState.triggers.length) % detonationState.triggers.length;
+          if (input.action && !lastInput.action) triggerDevice(detonationState.triggers[detonationState.selectedIndex]);
+        }
+      }
+      lastInput.action = input.action; lastInput.left = input.left; lastInput.right = input.right; lastInput.escape = input.escape;
       updateScoreHud();
       return;
     }
 
-    // player movement
-    let vx = (input.right - input.left);
-    let vy = (input.down - input.up);
+    // Player movement
+    let vx = (input.right - input.left); let vy = (input.down - input.up);
+    let moving = false;
     if(vx!==0 || vy!==0){
+      moving = true;
       const len = Math.hypot(vx,vy);
       vx /= len||1; vy /= len||1;
-      player.x += vx * player.speed * dt;
-      player.y += vy * player.speed * dt;
+      player.x += vx * player.speed * dt; player.y += vy * player.speed * dt;
     }
 
     const floor = levels[player.floor];
@@ -445,15 +464,13 @@
       }
     }
 
-    // stairs
+    // Stairs
     for(const s of floor.stairs){
       if(player.x > s.x && player.x < s.x + s.w && player.y > s.y && player.y < s.y + s.h){
-        const dest = s.toFloor;
-        player.floor = dest;
+        const dest = s.toFloor; player.floor = dest;
         const destStairs = levels[dest].stairs && levels[dest].stairs[0];
         if(destStairs){
-          const leftX = destStairs.x - player.r - 8;
-          const rightX = destStairs.x + destStairs.w + player.r + 8;
+          const leftX = destStairs.x - player.r - 8; const rightX = destStairs.x + destStairs.w + player.r + 8;
           if(leftX > 24) player.x = leftX; else player.x = rightX;
           player.y = destStairs.y + destStairs.h/2;
         }
@@ -461,137 +478,108 @@
     }
     
     // Interactions
-    if(gameState === 'playing'){
-      if(phaseState === 'recon') {
-        const spots = floor.scanPoints || [];
-        for(const spot of spots){
-          if (!spot.locked && dist(player.x,player.y,spot.x,spot.y) <= spot.r + player.r){
-            spot.progress = clamp(spot.progress + dt, 0, SCAN_TIME);
-          }
+    if(phaseState === 'recon') {
+      for(const spot of floor.scanPoints || []){
+        if (!spot.locked && dist(player.x,player.y,spot.x,spot.y) <= spot.r + player.r) spot.progress = clamp(spot.progress + dt, 0, SCAN_TIME);
+      }
+    } else if (phaseState === 'placement') {
+      const current = getCurrentDevice();
+      let targetSpot = null;
+      for(const spot of floor.placementSpots || []){
+        if(!spot.placedDevice && dist(player.x,player.y,spot.x,spot.y) <= spot.r + player.r){ targetSpot = spot; break; }
+      }
+      if(current && targetSpot && input.action){
+        if(holdPlacement.spot !== targetSpot) holdPlacement = {spot: targetSpot, timer: 0};
+        holdPlacement.timer += dt;
+        if(holdPlacement.timer >= current.placeTime){
+          targetSpot.placedDevice = current.type; player.carrying = null; holdPlacement = {spot:null, timer:0};
         }
-      } else if (phaseState === 'placement') {
-        const current = getCurrentDevice();
-        const spots = floor.placementSpots || [];
-        let targetSpot = null;
-        for(const spot of spots){
-          if(!spot.placedDevice && dist(player.x,player.y,spot.x,spot.y) <= spot.r + player.r){
-            targetSpot = spot; break;
-          }
-        }
-        if(current && targetSpot && input.action){
-          if(holdPlacement.spot !== targetSpot) holdPlacement = {spot: targetSpot, timer: 0};
-          holdPlacement.timer += dt;
-          if(holdPlacement.timer >= current.placeTime){
-            targetSpot.placedDevice = current.type;
-            placementLog.push({spotId: targetSpot.id, device: current.type, material: targetSpot.material, confidence: targetSpot.confidence});
-            player.carrying = null; holdPlacement = {spot:null, timer:0};
-          }
-        } else {
-          if(targetSpot !== holdPlacement.spot) holdPlacement.timer = 0;
-        }
+      } else {
+        if(targetSpot !== holdPlacement.spot) holdPlacement.timer = 0;
       }
     }
 
-    // exit logic
-    const ex = floor.exit;
-    const atExit = player.x > ex.x && player.x < ex.x + ex.w && player.y > ex.y && player.y < ex.y + ex.h;
-    if(atExit && !exitInfoShown){
-      if(phaseState === 'recon') {
-        showOverlay(`Exit point. Use ESC or E to finish recon.`, 'info');
-      } else {
-        if(gameState === 'playing' && !player.carrying && inventory.length > 0){
-          player.carrying = inventory.shift();
-          showOverlay(`Restocked with ${getCurrentDevice().name}. ${getRestockInfo()}`, 'info');
-        } else {
-          showOverlay(`Exit point. Devices available: ${getRestockInfo()}`, 'info');
+    // Stealth & Vision Math
+    let isSeen = false;
+    let isHeard = false;
+    if(floor.watchers) {
+      for(const w of floor.watchers) {
+        // Guard Movement
+        if(w.type === 'guard') {
+          const target = w.pts[w.ptIdx];
+          const dx = target.x - w.x; const dy = target.y - w.y;
+          const distToTarget = Math.hypot(dx,dy);
+          if(distToTarget < 5) {
+            w.ptIdx = (w.ptIdx + 1) % w.pts.length;
+          } else {
+            w.x += (dx/distToTarget) * w.speed * dt;
+            w.y += (dy/distToTarget) * w.speed * dt;
+            w.dir = Math.atan2(dy, dx);
+          }
         }
+        
+        // Vision Check
+        const distToPlayer = dist(w.x, w.y, player.x, player.y);
+        if(distToPlayer <= w.range) {
+          const angleToPlayer = Math.atan2(player.y - w.y, player.x - w.x);
+          let angleDiff = angleToPlayer - w.dir;
+          while(angleDiff <= -Math.PI) angleDiff += Math.PI*2;
+          while(angleDiff > Math.PI) angleDiff -= Math.PI*2;
+          
+          if(Math.abs(angleDiff) <= w.fov/2) {
+            if(!isLineBlockedByWalls(w.x, w.y, player.x, player.y, floor.walls)) {
+              isSeen = true;
+            }
+          }
+        }
+        
+        // Noise check during placement
+        if(phaseState === 'placement' && moving) {
+           const current = getCurrentDevice();
+           if(current && distToPlayer <= current.noiseRadius) isHeard = true;
+        }
+      }
+    }
+    
+    if(isSeen) heat += 40 * dt;
+    else if(isHeard) heat += 15 * dt;
+    else heat = Math.max(0, heat - 15 * dt);
+    
+    if(heat >= MAX_HEAT) {
+      gameState = 'caught';
+      showOverlay('You were spotted! Press E to restart level.', 'lose');
+    }
+
+    // Exit & Escaping logic
+    const ex = floor.exit;
+    const atExit = ex && ex.active && player.x > ex.x && player.x < ex.x + ex.w && player.y > ex.y && player.y < ex.y + ex.h;
+    if(atExit && !exitInfoShown){
+      if(phaseState === 'recon') showOverlay(`Exit point. Use ESC or E to finish recon.`, 'info');
+      else {
+        if(!player.carrying && inventory.length > 0){ player.carrying = inventory.shift(); showOverlay(`Restocked.`, 'info'); } 
+        else showOverlay(`Exit point. Devices available: ${inventory.length}`, 'info');
       }
       exitInfoShown = true;
       setTimeout(hideOverlay, 3200);
     }
     if(!atExit) exitInfoShown = false;
 
-    // watcher movement & detection
-    let seenByWatcher = false;
-    watchers.forEach(w=>{
-      if(w.type==='guard'){
-        const target = w.waypoints[w.idx];
-        const gdx = target.x - w.x; const gdy = target.y - w.y; const gd = Math.hypot(gdx,gdy);
-        if(gd < 6) w.idx = (w.idx + 1) % w.waypoints.length;
-        else {
-          const gx = (gdx/gd) * w.speed * dt; const gy = (gdy/gd) * w.speed * dt;
-          const trialX = w.x + gx; const trialY = w.y + gy;
-          const blocked = levels[w.floor].walls.some(rect=>circleRectCollision(trialX,trialY,18,rect));
-          if(!blocked){ w.x = trialX; w.y = trialY; } else w.idx = (w.idx + 1) % w.waypoints.length;
-        }
-      }
-      if(watcherSeesPlayer(w)) seenByWatcher = true;
-    });
-
-    let heardByGuard = false;
-    if(player.carrying){
-      const noise = getCurrentDevice().noiseRadius;
-      for(const w of watchers){
-        if(w.floor !== player.floor || w.type !== 'guard') continue;
-        if(dist(player.x,player.y,w.x,w.y) <= noise){ heardByGuard = true; break; }
+    if((input.escape && !lastInput.escape) || (atExit && input.action && !lastInput.action)){
+      if(phaseState === 'recon') advanceToPlacement();
+      else if (phaseState === 'placement') {
+        phaseState = 'detonation'; detonationState.started = false;
+        showOverlay('Placement complete! Press E to begin Detonation Phase.', 'win');
       }
     }
-    if(seenByWatcher) heat += heatIncreaseSeen * dt;
-    else if(heardByGuard) heat += 0.12 * dt;
-    if(heat > 0 && !seenByWatcher && !heardByGuard) heat = clamp(heat - heatDecrease * dt, 0, 1);
-    heat = clamp(heat,0,1);
-
-    // Interruptions
-    if(seenByWatcher || heardByGuard) {
-      if(phaseState === 'recon') {
-        const spots = floor.scanPoints || [];
-        for(const spot of spots){
-           if (dist(player.x,player.y,spot.x,spot.y) <= spot.r + player.r && spot.progress > 0){
-             spot.locked = true; 
-           }
-        }
-      } else if(phaseState === 'placement' && holdPlacement.spot){
-        const current = getCurrentDevice();
-        if(current){
-          showOverlay('Placement interrupted! Device lost.', 'lose');
-          player.carrying = null; holdPlacement = {spot:null, timer:0};
-          setTimeout(()=>{ document.getElementById('overlay').classList.add('hidden'); }, 1200);
-        }
-      }
-    }
-
-    if(heat >= 1){
-      caught = true;
-      showOverlay('Caught! Restarting...', 'lose');
-      setTimeout(()=>{ resetLevel(); hideOverlay(); }, 1200);
-    }
-
-    // Escaping
-    if(gameState === 'playing' && (input.escape || (atExit && input.action))){
-      if(phaseState === 'recon') {
-        advanceToPlacement();
-      } else if (phaseState === 'placement') {
-        const placementMap = buildPlacementMap();
-        placementLog = placementMap.placedSpots;
-        window.__placementMap = placementMap;
-        gameState = 'finished';
-        phaseState = 'detonation';
-        detonationState.started = false; detonationState.active = false; detonationState.countdown = 1.4;
-        detonationState.pulseTimer = 0; detonationState.supports = []; detonationState.collapsed = false;
-        detonationState.message = 'Phase 3 prototype ready. Press E to trigger.';
-        showOverlay('Placement complete! Phase 3 prototype ready. Press E to trigger.', 'win');
-      }
-    }
-
+    
+    lastInput.action = input.action; lastInput.left = input.left; lastInput.right = input.right; lastInput.escape = input.escape;
     updateScoreHud();
   }
 
   function showOverlay(text, cls){
     const o = document.getElementById('overlay');
     o.innerHTML = text; o.className = '';
-    if(cls==='win') o.classList.add('win');
-    if(cls==='lose') o.classList.add('lose');
-    if(cls==='info') o.classList.add('info');
+    if(cls) o.classList.add(cls);
     o.classList.remove('hidden');
   }
   function hideOverlay(){ document.getElementById('overlay').classList.add('hidden'); }
@@ -599,23 +587,40 @@
   function draw(){
     ctx.clearRect(0,0,W,H);
     if(phaseState === 'detonation'){ drawDetonationPhase(); return; }
+    
     const lev = levels[player.floor];
     const camx = clamp(player.x - W/2, 0, Math.max(0, lev.width - W));
     const camy = clamp(player.y - H/2, 0, Math.max(0, lev.height - H));
     ctx.fillStyle = '#061029'; ctx.fillRect(0,0,W,H);
     ctx.save(); ctx.translate(-camx, -camy);
 
-    // walls
+    // Watcher vision cones
+    if(lev.watchers) {
+      for(const w of lev.watchers) {
+        const poly = computeVisionPolygon(w, lev.walls);
+        ctx.fillStyle = 'rgba(255, 60, 60, 0.15)';
+        ctx.beginPath();
+        ctx.moveTo(poly[0].x, poly[0].y);
+        for(let i=1; i<poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.fillStyle = w.type === 'guard' ? '#ff3333' : '#aa3333';
+        ctx.beginPath(); ctx.arc(w.x, w.y, 10, 0, Math.PI*2); ctx.fill();
+      }
+    }
+
+    // Walls
     ctx.fillStyle = '#223';
     for(const w of lev.walls) ctx.fillRect(w.x, w.y, w.w, w.h);
 
-    // Phase specific spots
+    // Spots
     if (phaseState === 'recon') {
       for(const spot of lev.scanPoints || []){
         ctx.beginPath(); ctx.arc(spot.x, spot.y, spot.r, 0, Math.PI*2);
         ctx.fillStyle = spot.progress >= SCAN_TIME ? 'rgba(90,200,240,0.2)' : 'rgba(90,200,240,0.05)';
         ctx.fill();
-        ctx.strokeStyle = spot.locked ? '#ff595e' : (spot.progress >= SCAN_TIME ? '#5ac8f0' : '#4a8ba8'); 
+        ctx.strokeStyle = spot.progress >= SCAN_TIME ? '#5ac8f0' : '#4a8ba8'; 
         ctx.lineWidth = 2; ctx.stroke();
         
         ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
@@ -624,7 +629,7 @@
         if(spot.progress > 0 && spot.progress < SCAN_TIME){
           const progress = spot.progress/SCAN_TIME;
           ctx.beginPath(); ctx.arc(spot.x, spot.y, spot.r + 8, -Math.PI/2, -Math.PI/2 + Math.PI*2*progress);
-          ctx.strokeStyle = spot.locked ? '#ff595e' : '#5ac8f0'; ctx.lineWidth = 4; ctx.stroke();
+          ctx.strokeStyle = '#5ac8f0'; ctx.lineWidth = 4; ctx.stroke();
         }
       }
     } else if (phaseState === 'placement') {
@@ -633,9 +638,6 @@
         ctx.fillStyle = spot.placedDevice ? 'rgba(90,200,140,0.28)' : 'rgba(210,185,95,0.14)';
         ctx.fill();
         ctx.strokeStyle = spot.placedDevice ? '#78c084' : '#f0d575'; ctx.lineWidth = 2; ctx.stroke();
-        
-        ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText(`${spot.material} (${Math.round(spot.confidence*100)}%)`, spot.x, spot.y - spot.r - 6);
         
         if(spot.placedDevice){
           ctx.fillStyle = getDeviceData(spot.placedDevice).color;
@@ -650,110 +652,127 @@
           }
         }
       }
+      
+      // Noise radius preview
+      const currentDev = getCurrentDevice();
+      if(currentDev && (input.left||input.right||input.up||input.down)) {
+         ctx.beginPath(); ctx.arc(player.x, player.y, currentDev.noiseRadius, 0, Math.PI*2);
+         ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)'; ctx.lineWidth = 1; ctx.stroke();
+      }
     }
 
-    // exit
-    ctx.fillStyle = lev.exit.active ? 'rgba(255,200,90,0.45)' : 'rgba(80,80,80,0.35)';
-    ctx.fillRect(lev.exit.x, lev.exit.y, lev.exit.w, lev.exit.h);
-    ctx.strokeStyle = '#fff'; ctx.strokeRect(lev.exit.x, lev.exit.y, lev.exit.w, lev.exit.h);
-    ctx.fillStyle = '#111'; ctx.font = '18px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(lev.exit.active ? 'EXIT' : 'Exit', lev.exit.x + lev.exit.w/2, lev.exit.y + lev.exit.h/2);
+    // Exit
+    if(lev.exit){
+      ctx.fillStyle = lev.exit.active ? 'rgba(255,200,90,0.45)' : 'rgba(80,80,80,0.35)';
+      ctx.fillRect(lev.exit.x, lev.exit.y, lev.exit.w, lev.exit.h);
+      ctx.strokeStyle = '#fff'; ctx.strokeRect(lev.exit.x, lev.exit.y, lev.exit.w, lev.exit.h);
+      ctx.fillStyle = '#111'; ctx.font = '18px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('EXIT', lev.exit.x + lev.exit.w/2, lev.exit.y + lev.exit.h/2);
+    }
 
-    // watchers
-    watchers.forEach(watcher=>{
-      if(watcher.floor !== player.floor) return;
-      const visionPts = computeVisionPolygon(watcher);
-      if(visionPts.length){
-        ctx.beginPath(); ctx.moveTo(watcher.x, watcher.y);
-        for(const p of visionPts) ctx.lineTo(p.x, p.y);
-        ctx.closePath(); ctx.fillStyle = watcher.type === 'guard' ? 'rgba(200,120,120,0.08)' : 'rgba(255,240,120,0.08)'; ctx.fill();
-      }
-      if(watcher.type === 'guard'){
-        ctx.fillStyle = '#e07a5f'; ctx.beginPath(); ctx.arc(watcher.x,watcher.y,18,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#300'; ctx.font='14px sans-serif'; ctx.fillText('G', watcher.x-6, watcher.y+6);
-      } else {
-        ctx.fillStyle = '#d8d8d8'; ctx.beginPath(); ctx.arc(watcher.x,watcher.y,16,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#333'; ctx.fillRect(watcher.x-10, watcher.y-8, 20, 10);
-        ctx.fillStyle='#000'; ctx.font='12px sans-serif'; ctx.fillText('C', watcher.x-4, watcher.y+5);
-      }
-    });
-
-    // stairs
+    // Stairs
     for(const s of lev.stairs){
       ctx.fillStyle = 'rgba(180,180,220,0.12)'; ctx.fillRect(s.x,s.y,s.w,s.h);
       ctx.strokeStyle = '#cfc'; ctx.strokeRect(s.x,s.y,s.w,s.h);
-      ctx.fillStyle = '#fff'; ctx.font='14px sans-serif'; ctx.fillText('STAIRS', s.x + s.w/2, s.y + s.h/2);
+      ctx.fillStyle = '#fff'; ctx.font='14px sans-serif'; 
+      ctx.fillText(s.label || 'STAIRS', s.x + s.w/2, s.y + s.h/2);
     }
 
-    // player noise radius
-    const currentDevice = getCurrentDevice();
-    if(currentDevice && gameState === 'playing' && phaseState === 'placement'){
-      ctx.beginPath(); ctx.arc(player.x, player.y, currentDevice.noiseRadius, 0, Math.PI*2);
-      ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.lineWidth = 1; ctx.stroke();
-    }
-
-    // player
+    // Player
     ctx.fillStyle='#9ad3bc'; ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,Math.PI*2); ctx.fill();
     ctx.strokeStyle='#083'; ctx.lineWidth=2; ctx.stroke();
     ctx.restore();
-
-    // HUD heat bar
-    const hx = 10, hy = H - 44, hw = 160, hh = 18;
-    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fillRect(hx-2, hy-2, hw+4, hh+4);
-    ctx.fillStyle = '#ff595e'; ctx.fillRect(hx,hy,hw*heat,hh);
-    ctx.strokeStyle='#fff'; ctx.strokeRect(hx,hy,hw,hh);
+    
+    // Draw Heat UI
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(W/2 - 100, 10, 200, 20);
+    ctx.fillStyle = heat > 70 ? '#ff4444' : '#ffaa00';
+    ctx.fillRect(W/2 - 100, 10, (heat/MAX_HEAT)*200, 20);
+    ctx.strokeStyle = '#fff'; ctx.strokeRect(W/2 - 100, 10, 200, 20);
+    ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('HEAT', W/2, 34);
   }
 
   function drawDetonationPhase(){
     ctx.fillStyle = '#040816'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle = '#d8e6ff'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('Phase 3 Prototype — Detonation', W/2, 36);
-
-    const buildingX = 180; const buildingY = 140; const buildingW = 420; const buildingH = 420;
-    ctx.strokeStyle = '#ffcc66'; ctx.strokeRect(buildingX, buildingY, buildingW, buildingH);
-    ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(buildingX, buildingY, buildingW, buildingH);
-
-    const supports = detonationState.supports;
-    if(!supports.length){
-      ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif';
-      ctx.fillText('No support graph yet.', W/2, H/2);
+    
+    if (gameState === 'finished' && detonationState.score) {
+      ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.font = 'bold 36px serif'; ctx.fillText(detonationState.score.verdict, W/2, H/2 - 40);
+      ctx.font = '24px sans-serif';
+      ctx.fillStyle = detonationState.score.score > 50 ? '#ff6b6b' : '#45b36b';
+      ctx.fillText(`Suspicion Score: ${detonationState.score.score}/100`, W/2, H/2 + 20);
       return;
     }
 
-    const floorY = buildingY + 120; const floorHeight = 280;
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    for(let i=0;i<3;i++){
-      const y = floorY + i * 70;
-      ctx.beginPath(); ctx.moveTo(buildingX + 40, y); ctx.lineTo(buildingX + buildingW - 40, y); ctx.stroke();
-    }
+    ctx.fillStyle = '#d8e6ff'; ctx.font = '20px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Detonation Phase', W/2, 36);
 
-    supports.forEach((support, index)=>{
-      const x = buildingX + 90 + index * 90;
-      const y = floorY + 20;
-      let color = '#45b36b';
-      if(support.status === 'warn') color = '#f6c453';
-      if(support.status === 'critical') color = '#ff6b6b';
-      if(support.status === 'failed') color = '#2f2f3a';
-      ctx.fillStyle = color; ctx.fillRect(x, y, 42, floorHeight - 20);
-      ctx.strokeStyle = '#d9ecff'; ctx.strokeRect(x, y, 42, floorHeight - 20);
-      ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText(support.id, x + 21, y - 8);
+    if(!detonationState.started) { ctx.fillText('Press E to begin collapse sequence.', W/2, H/2); return; }
+
+    const buildingW = 640; const buildingX = W/2 - buildingW/2; const floorH = 160;
+
+    [0, 1, 2].forEach(tier => {
+      const fs = detonationState.floorStates[tier];
+      const cx = buildingX + buildingW/2; const cy = 120 + (tier * floorH) + floorH/2;
+      
+      ctx.save(); ctx.translate(cx, cy + fs.yOff); ctx.rotate(fs.rot);
+      ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(-buildingW/2, -floorH/2, buildingW, floorH); ctx.strokeRect(-buildingW/2, -floorH/2, buildingW, floorH);
+      
+      detonationState.nodes.filter(n => n.visualTier === tier).forEach(node => {
+        if (node.status === 'failed') return; 
+        const ratio = clamp(node.load / Math.max(0.1, node.capacity), 0, 1);
+        const hue = (1 - ratio) * 120; 
+        ctx.fillStyle = `hsl(${hue}, 80%, 50%)`; ctx.strokeStyle = '#fff';
+        
+        const nx = (node.cx - cx) + node.shake; const ny = (node.cy - cy) - floorH/2 + 20; 
+        const nw = 24; const nh = floorH - 40;
+        
+        ctx.fillRect(nx - nw/2, ny, nw, nh); ctx.strokeRect(nx - nw/2, ny, nw, nh);
+        
+        if (node.device && !node.triggered) {
+          ctx.fillStyle = getDeviceData(node.device).color;
+          ctx.beginPath(); ctx.arc(nx, ny + nh/2, 8, 0, Math.PI*2); ctx.fill();
+        }
+        
+        if (ratio > 0.9) {
+          ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(nx - 5, ny + 10); ctx.lineTo(nx + 8, ny + 30);
+          ctx.lineTo(nx - 6, ny + 60); ctx.lineTo(nx + 4, ny + nh - 10); ctx.stroke(); ctx.lineWidth = 1;
+        }
+      });
+      ctx.restore();
     });
 
-    ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(detonationState.message, W/2, H - 70);
-    if(!detonationState.started) ctx.fillText('Press E to trigger the detonation prototype.', W/2, H - 40);
+    if (detonationState.triggers.length > 0 && !detonationState.completed) {
+      const activeTargetId = detonationState.triggers[detonationState.selectedIndex];
+      const targetNode = detonationState.nodes.find(n => n.id === activeTargetId);
+      
+      if (targetNode && !targetNode.triggered && targetNode.status !== 'failed') {
+        const fs = detonationState.floorStates[targetNode.visualTier];
+        const screenX = targetNode.cx; const screenY = targetNode.cy + fs.yOff;
+        
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+        const pulse = 16 + Math.sin(performance.now() / 150) * 4;
+        ctx.beginPath(); ctx.arc(screenX, screenY, pulse, 0, Math.PI*2); ctx.stroke(); ctx.lineWidth = 1;
+        
+        ctx.fillStyle = '#fff'; ctx.font = '14px sans-serif';
+        ctx.fillText(`Target: ${getDeviceData(targetNode.device).name}`, W/2, H - 40);
+        ctx.fillText(`[< Left]  [Right >]   [E] Detonate`, W/2, H - 20);
+      } else {
+        ctx.fillStyle = '#aaa'; ctx.font = '14px sans-serif';
+        ctx.fillText(`Device detonated or lost in collapse.`, W/2, H - 40);
+        ctx.fillText(`[< Left]  [Right >]`, W/2, H - 20);
+      }
+    }
   }
 
   function loop(now){
     const dt = Math.min(0.05, (now - last)/1000);
-    last = now; update(dt); draw();
-    requestAnimationFrame(loop);
+    last = now; update(dt); draw(); requestAnimationFrame(loop);
   }
 
-  window.__reconScoreState = scoreState;
   resetLevel();
   requestAnimationFrame(loop);
 })();
